@@ -1,7 +1,7 @@
 # JCryptoBox
 
-JCryptoBox is a simple cryptography facade inspired by NaCl and libsodium.
-The central concept exposed is the idea of boxing and opening boxed data.
+JCryptoBox is a simple cryptography facade inspired by NaCl and libsodium that uses slightly more conservative cryptography standards (NIST FIPS 140).
+The central APIs are `Box` for public key cryptography and `SecretBox` for secret key cryptography.
 
 ## Usage
 

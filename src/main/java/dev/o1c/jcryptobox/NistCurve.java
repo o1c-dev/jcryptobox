@@ -16,6 +16,8 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.KeySpec;
 import java.util.Arrays;
 
+// based on:
+// https://github.com/google/tink/blob/e767489e11f66d162637f73dbe75eee6e44a3208/java_src/src/main/java/com/google/crypto/tink/subtle/EllipticCurves.java
 enum NistCurve {
     P256("115792089210356248762697446949407573530086143415290314195533631308867097853951",
             "115792089210356248762697446949407573529996955224135760342422259061068512044369",
