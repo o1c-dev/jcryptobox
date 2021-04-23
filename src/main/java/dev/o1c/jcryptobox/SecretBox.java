@@ -41,6 +41,12 @@ public class SecretBox {
         }
     }
 
+    public static byte[] box(byte[] key, byte[] nonce, byte[] message, int offset, int length) {
+        byte[] box = new byte[length + TAG_BYTES];
+        box(key, nonce, message, offset, length, box, 0);
+        return box;
+    }
+
     public static byte[] box(byte[] key, byte[] nonce, byte[] message) {
         Objects.requireNonNull(key);
         Objects.requireNonNull(nonce);
@@ -73,6 +79,12 @@ public class SecretBox {
         } catch (IllegalBlockSizeException | BadPaddingException | ShortBufferException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    public static byte[] open(byte[] key, byte[] nonce, byte[] box, int offset, int length) throws AEADBadTagException {
+        byte[] message = new byte[box.length - TAG_BYTES];
+        open(key, nonce, box, offset, length, message, 0);
+        return message;
     }
 
     public static byte[] open(byte[] key, byte[] nonce, byte[] secretBox) throws AEADBadTagException {

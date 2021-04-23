@@ -3,7 +3,6 @@ package dev.o1c.jcryptobox;
 import org.junit.Before;
 import org.junit.Test;
 
-import javax.crypto.AEADBadTagException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.util.concurrent.ThreadLocalRandom;
@@ -22,7 +21,7 @@ public class BoxTest {
     }
 
     @Test
-    public void boxSmokeTest() throws AEADBadTagException {
+    public void boxSmokeTest() throws Exception {
         byte[] message = "Hello, Bob! This is Alice".getBytes(StandardCharsets.UTF_8);
         byte[] nonce = new byte[12];
         ThreadLocalRandom.current().nextBytes(nonce);

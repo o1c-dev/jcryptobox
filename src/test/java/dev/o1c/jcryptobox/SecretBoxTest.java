@@ -2,20 +2,20 @@ package dev.o1c.jcryptobox;
 
 import org.junit.Test;
 
-import javax.crypto.AEADBadTagException;
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.ThreadLocalRandom;
+import java.security.SecureRandom;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertArrayEquals;
 
 public class SecretBoxTest {
 
     @Test
-    public void smokeTest() throws AEADBadTagException {
+    public void smokeTest() throws Exception {
         byte[] key = new byte[32];
         byte[] nonce = new byte[32];
-        ThreadLocalRandom.current().nextBytes(key);
-        ThreadLocalRandom.current().nextBytes(nonce);
+        SecureRandom random = SecureRandom.getInstanceStrong();
+        random.nextBytes(key);
+        random.nextBytes(nonce);
         byte[] message = "Hello, world!".getBytes(StandardCharsets.UTF_8);
 
         assertArrayEquals(message, SecretBox.open(key, nonce, SecretBox.box(key, nonce, message)));
