@@ -1,6 +1,5 @@
 package dev.o1c.jcryptobox;
 
-import javax.crypto.AEADBadTagException;
 import javax.crypto.KeyAgreement;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -18,83 +17,123 @@ import java.util.Arrays;
 
 public class Box {
 
+    private final KeyAgreement keyAgreement = getECDH();
+    private final PublicKey publicKey;
+
+    public Box() {
+        this(generateKeyPair());
+    }
+
+    public Box(KeyPair keyPair) {
+        publicKey = keyPair.getPublic();
+        try {
+            keyAgreement.init(keyPair.getPrivate());
+        } catch (InvalidKeyException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    public PublicKey getPublicKey() {
+        return publicKey;
+    }
+
+    public void box(PublicKey recipient, byte[] nonce, byte[] input, int inOffset, int inLength,
+                    byte[] output, int outOffset) {
+        generateSecretBox(recipient).box(nonce, input, inOffset, inLength, output, outOffset);
+    }
+
+    public byte[] box(PublicKey recipient, byte[] nonce, byte[] message, int offset, int length) {
+        return generateSecretBox(recipient).box(nonce, message, offset, length);
+    }
+
+    public byte[] box(PublicKey recipient, byte[] nonce, byte[] message) {
+        return generateSecretBox(recipient).box(nonce, message);
+    }
+
+    public void open(PublicKey sender, byte[] nonce, byte[] input, int inOffset, int inLength, byte[] output, int outOffset) {
+        recoverSecretBox(sender).open(nonce, input, inOffset, inLength, output, outOffset);
+    }
+
+    public byte[] open(PublicKey sender, byte[] nonce, byte[] box, int offset, int length) {
+        return recoverSecretBox(sender).open(nonce, box, offset, length);
+    }
+
+    public byte[] open(PublicKey sender, byte[] nonce, byte[] box) {
+        return recoverSecretBox(sender).open(nonce, box);
+    }
+
+    public byte[] open(byte[] sealedBox) {
+        int ekLength = Byte.toUnsignedInt(sealedBox[0]);
+        int messageLength = sealedBox.length - 1 - ekLength;
+        if (messageLength < SecretBox.TAG_BYTES) {
+            throw new IllegalArgumentException("Sealed box too small");
+        }
+        KeySpec keySpec = new X509EncodedKeySpec(Arrays.copyOfRange(sealedBox, 1, 1 + ekLength));
+        PublicKey ephemeralKey;
+        try {
+            ephemeralKey = getECFactory().generatePublic(keySpec);
+        } catch (InvalidKeySpecException e) {
+            throw new IllegalArgumentException(e);
+        }
+
+        MessageDigest sha256 = getSha256();
+        sha256.update(ephemeralKey.getEncoded());
+        sha256.update(publicKey.getEncoded());
+        byte[] nonce = sha256.digest();
+
+        return open(ephemeralKey, nonce, sealedBox, 1 + ekLength, messageLength);
+    }
+
+    private SecretBox generateSecretBox(PublicKey recipient) {
+        Mac kdf = initKDF(recipient);
+        kdf.update(publicKey.getEncoded());
+        kdf.update(recipient.getEncoded());
+        return new SecretBox(kdf.doFinal());
+    }
+
+    private SecretBox recoverSecretBox(PublicKey sender) {
+        Mac kdf = initKDF(sender);
+        kdf.update(sender.getEncoded());
+        kdf.update(publicKey.getEncoded());
+        return new SecretBox(kdf.doFinal());
+    }
+
+    private Mac initKDF(PublicKey peerKey) {
+        try {
+            keyAgreement.doPhase(peerKey, true);
+        } catch (InvalidKeyException e) {
+            throw new IllegalArgumentException(e);
+        }
+        Mac kdf = getHmac();
+        try {
+            kdf.init(new SecretKeySpec(keyAgreement.generateSecret(), "KDF"));
+        } catch (InvalidKeyException e) {
+            throw new IllegalStateException(e);
+        }
+        return kdf;
+    }
+
+    public static byte[] seal(PublicKey recipient, byte[] message) {
+        Box box = new Box();
+        byte[] ephemeralKey = box.publicKey.getEncoded();
+        MessageDigest sha256 = getSha256();
+        sha256.update(ephemeralKey);
+
+        int ekLength = ephemeralKey.length;
+        byte[] seal = new byte[1 + ekLength + message.length + SecretBox.TAG_BYTES];
+        seal[0] = (byte) ekLength;
+        System.arraycopy(ephemeralKey, 0, seal, 1, ekLength);
+        sha256.update(recipient.getEncoded());
+        byte[] nonce = sha256.digest();
+
+        box.box(recipient, nonce, message, 0, message.length, seal, 1 + ekLength);
+        return seal;
+    }
+
     public static KeyPair generateKeyPair() {
         KeyPairGenerator keyPairGenerator = getECGenerator();
         keyPairGenerator.initialize(256);
         return keyPairGenerator.generateKeyPair();
-    }
-
-    public static byte[] box(KeyPair sender, PublicKey recipient, byte[] nonce, byte[] message) throws InvalidKeyException {
-        byte[] key = generateBoxKey(sender, recipient);
-        return SecretBox.box(key, nonce, message);
-    }
-
-    public static byte[] open(KeyPair recipient, PublicKey sender, byte[] nonce, byte[] box) throws AEADBadTagException, InvalidKeyException {
-        byte[] key = generateBoxKey(sender, recipient);
-        return SecretBox.open(key, nonce, box);
-    }
-
-    public static byte[] seal(PublicKey recipient, byte[] message) throws InvalidKeyException {
-        KeyPair sender = generateKeyPair();
-        byte[] key = generateBoxKey(sender, recipient);
-
-        MessageDigest sha256 = getSha256();
-        byte[] ephemeralKey = sender.getPublic().getEncoded();
-        sha256.update(ephemeralKey);
-        sha256.update(recipient.getEncoded());
-        byte[] nonce = sha256.digest();
-
-        int ekLength = ephemeralKey.length;
-        byte[] box = new byte[1 + ekLength + message.length + SecretBox.TAG_BYTES];
-        box[0] = (byte) ekLength;
-        System.arraycopy(ephemeralKey, 0, box, 1, ekLength);
-        SecretBox.box(key, nonce, message, 0, message.length, box, ekLength + 1);
-        return box;
-    }
-
-    public static byte[] unseal(KeyPair recipient, byte[] sealedBox) throws AEADBadTagException, InvalidKeyException {
-        int ekLength = Byte.toUnsignedInt(sealedBox[0]);
-        int messageLength = sealedBox.length - 1 - ekLength - SecretBox.TAG_BYTES;
-        if (messageLength < 0) {
-            throw new IllegalArgumentException("Sealed box too small");
-        }
-        KeySpec ephemeralKey = new X509EncodedKeySpec(Arrays.copyOfRange(sealedBox, 1, 1 + ekLength));
-        PublicKey publicKey;
-        try {
-            publicKey = getECFactory().generatePublic(ephemeralKey);
-        } catch (InvalidKeySpecException e) {
-            throw new IllegalArgumentException(e);
-        }
-        byte[] key = generateBoxKey(publicKey, recipient);
-
-        MessageDigest sha256 = getSha256();
-        sha256.update(publicKey.getEncoded());
-        sha256.update(recipient.getPublic().getEncoded());
-        byte[] nonce = sha256.digest();
-
-        return SecretBox.open(key, nonce, sealedBox, 1 + ekLength, messageLength);
-    }
-
-    private static byte[] generateBoxKey(KeyPair sender, PublicKey recipient) throws InvalidKeyException {
-        KeyAgreement kx = getECDH();
-        kx.init(sender.getPrivate());
-        kx.doPhase(recipient, true);
-        Mac kdf = getHmac();
-        kdf.init(new SecretKeySpec(kx.generateSecret(), "KDF"));
-        kdf.update(sender.getPublic().getEncoded());
-        kdf.update(recipient.getEncoded());
-        return kdf.doFinal();
-    }
-
-    private static byte[] generateBoxKey(PublicKey sender, KeyPair recipient) throws InvalidKeyException {
-        KeyAgreement kx = getECDH();
-        kx.init(recipient.getPrivate());
-        kx.doPhase(sender, true);
-        Mac kdf = getHmac();
-        kdf.init(new SecretKeySpec(kx.generateSecret(), "KDF"));
-        kdf.update(sender.getEncoded());
-        kdf.update(recipient.getPublic().getEncoded());
-        return kdf.doFinal();
     }
 
     private static KeyAgreement getECDH() {
