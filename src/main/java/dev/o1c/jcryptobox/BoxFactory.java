@@ -6,7 +6,6 @@ import javax.crypto.spec.SecretKeySpec;
 import java.security.InvalidKeyException;
 import java.security.KeyPair;
 import java.security.MessageDigest;
-import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.KeySpec;
@@ -15,27 +14,28 @@ import java.util.Arrays;
 import java.util.Objects;
 
 public class BoxFactory {
-    private final KeyAgreement keyAgreement = Algorithms.getECDH();
+    private final KeyAgreement keyAgreement;
     private final PublicKey publicKey;
     private final byte[] encodedKey;
 
-    private BoxFactory(PublicKey publicKey, PrivateKey privateKey) {
-        this.publicKey = publicKey;
+    private BoxFactory(KeyPair keyPair) {
+        keyAgreement = SecurityLevel.getDefault().getKeyAgreement();
+        publicKey = keyPair.getPublic();
         encodedKey = publicKey.getEncoded();
         try {
-            keyAgreement.init(privateKey);
+            keyAgreement.init(keyPair.getPrivate());
         } catch (InvalidKeyException e) {
             throw new IllegalArgumentException(e);
         }
     }
 
     public static BoxFactory getRandom() {
-        return fromKeyPair(Algorithms.getECGenerator().generateKeyPair());
+        return new BoxFactory(SecurityLevel.getDefault().getKeyPairGenerator().generateKeyPair());
     }
 
     public static BoxFactory fromKeyPair(KeyPair keyPair) {
         Objects.requireNonNull(keyPair);
-        return new BoxFactory(keyPair.getPublic(), keyPair.getPrivate());
+        return new BoxFactory(keyPair);
     }
 
     public PublicKey getPublicKey() {
@@ -76,14 +76,14 @@ public class BoxFactory {
         KeySpec keySpec = new X509EncodedKeySpec(Arrays.copyOfRange(input, inOffset + 1, inOffset + 1 + keyLength));
         PublicKey sealKey;
         try {
-            sealKey = Algorithms.getECFactory().generatePublic(keySpec);
+            sealKey = SecurityLevel.getDefault().getKeyFactory().generatePublic(keySpec);
         } catch (InvalidKeySpecException e) {
             throw new IllegalArgumentException(e);
         }
-        MessageDigest sha256 = Algorithms.getSha256();
-        sha256.update(input, inOffset + 1, keyLength);
-        sha256.update(encodedKey);
-        byte[] nonce = sha256.digest();
+        MessageDigest digest = SecurityLevel.getDefault().getMessageDigest();
+        digest.update(input, inOffset + 1, keyLength);
+        digest.update(encodedKey);
+        byte[] nonce = digest.digest();
 
         open(sealKey, nonce, input, inOffset + 1 + keyLength, boxLength, output, outOffset);
     }
@@ -106,14 +106,18 @@ public class BoxFactory {
         Mac kdf = initKDF(recipient);
         kdf.update(encodedKey);
         kdf.update(recipient.getEncoded());
-        return SecretBoxFactory.fromKeyData(kdf.doFinal());
+        byte[] mac = kdf.doFinal();
+        SecretKeySpec key = new SecretKeySpec(mac, 0, mac.length / 2, "AES");
+        return SecretBoxFactory.fromSecretKey(key);
     }
 
     private SecretBoxFactory recoverSecretBox(PublicKey sender) {
         Mac kdf = initKDF(sender);
         kdf.update(sender.getEncoded());
         kdf.update(encodedKey);
-        return SecretBoxFactory.fromKeyData(kdf.doFinal());
+        byte[] mac = kdf.doFinal();
+        SecretKeySpec key = new SecretKeySpec(mac, 0, mac.length / 2, "AES");
+        return SecretBoxFactory.fromSecretKey(key);
     }
 
     private Mac initKDF(PublicKey peerKey) {
@@ -122,7 +126,7 @@ public class BoxFactory {
         } catch (InvalidKeyException e) {
             throw new IllegalArgumentException(e);
         }
-        Mac kdf = Algorithms.getHmac();
+        Mac kdf = SecurityLevel.getDefault().getMac();
         try {
             kdf.init(new SecretKeySpec(keyAgreement.generateSecret(), "KDF"));
         } catch (InvalidKeyException e) {

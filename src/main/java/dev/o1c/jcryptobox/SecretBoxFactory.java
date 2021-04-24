@@ -3,7 +3,6 @@ package dev.o1c.jcryptobox;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 import java.security.GeneralSecurityException;
 import java.util.Objects;
 
@@ -13,21 +12,12 @@ public class SecretBoxFactory {
 
     private final SecretKey key;
 
-    private SecretBoxFactory(SecretKey key) {
+    SecretBoxFactory(SecretKey key) {
         this.key = key;
     }
 
-    private SecretBoxFactory(byte[] keyData) {
-        key = new SecretKeySpec(keyData, "AES");
-    }
-
     public static SecretBoxFactory getRandom() {
-        return new SecretBoxFactory(Algorithms.getAesKeyGenerator().generateKey());
-    }
-
-    public static SecretBoxFactory fromKeyData(byte[] keyData) {
-        Objects.requireNonNull(keyData);
-        return new SecretBoxFactory(keyData);
+        return new SecretBoxFactory(SecurityLevel.getDefault().getKeyGenerator().generateKey());
     }
 
     public static SecretBoxFactory fromSecretKey(SecretKey key) {
@@ -40,7 +30,7 @@ public class SecretBoxFactory {
     }
 
     public void box(byte[] nonce, byte[] input, int inOffset, int inLength, byte[] output, int outOffset) {
-        Cipher cipher = Algorithms.getAesCipher();
+        Cipher cipher = SecurityLevel.getDefault().getCipher();
         try {
             cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, nonce));
             cipher.doFinal(input, inOffset, inLength, output, outOffset);
@@ -60,7 +50,7 @@ public class SecretBoxFactory {
     }
 
     public void open(byte[] nonce, byte[] input, int inOffset, int inLength, byte[] output, int outOffset) {
-        Cipher cipher = Algorithms.getAesCipher();
+        Cipher cipher = SecurityLevel.getDefault().getCipher();
         try {
             cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, nonce));
             cipher.doFinal(input, inOffset, inLength, output, outOffset);

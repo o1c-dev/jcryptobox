@@ -4,6 +4,8 @@ JCryptoBox is a simple cryptography facade inspired by NaCl and libsodium that u
 Cryptographic APIs are enabled via boxes.
 Secret key cryptography is exposed via `SecretBoxFactory`.
 Public key cryptography is exposed for mutual authentication via `BoxFactory` and for anonymous senders via `SealedBoxFactory`.
+By default, boxes provide 128-bit security.
+This can be overridden via the system property `dev.o1c.jcryptobox.SecurityLevel` which can be set to `SECRET` (128-bit security) or `TOP_SECRET` (256-bit security).
 
 ## Usage
 

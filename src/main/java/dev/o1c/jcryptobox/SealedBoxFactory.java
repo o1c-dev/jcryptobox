@@ -28,10 +28,10 @@ public class SealedBoxFactory {
         output[outOffset] = (byte) keyLength;
         System.arraycopy(sealKey, 0, output, outOffset + 1, keyLength);
 
-        MessageDigest sha256 = Algorithms.getSha256();
-        sha256.update(sealKey);
-        sha256.update(encodedKey);
-        byte[] nonce = sha256.digest();
+        MessageDigest digest = SecurityLevel.getDefault().getMessageDigest();
+        digest.update(sealKey);
+        digest.update(encodedKey);
+        byte[] nonce = digest.digest();
 
         seal.box(recipientKey, nonce, input, inOffset, inLength, output, outOffset + 1 + keyLength);
     }
