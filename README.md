@@ -1,34 +1,35 @@
 # JCryptoBox
 
 JCryptoBox is a simple cryptography facade inspired by NaCl and libsodium that uses slightly more conservative cryptography standards (NIST FIPS 140).
-The central APIs are `Box` for public key cryptography and `SecretBox` for secret key cryptography.
+Cryptographic APIs are enabled via boxes.
+Secret key cryptography is exposed via `SecretBoxFactory`.
+Public key cryptography is exposed for mutual authentication via `BoxFactory` and for anonymous senders via `SealedBoxFactory`.
 
 ## Usage
 
 ```java
-import dev.o1c.jcryptobox.Box;
+import dev.o1c.jcryptobox.BoxFactory;
+import dev.o1c.jcryptobox.SealedBoxFactory;
 
 import java.nio.charset.StandardCharsets;
-import java.security.KeyPair;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 
 class Example {
     static void sealedBox() {
-        // generate random keypair
-        Box alice = new Box();
-        // or obtain a KeyPair from Box.generateKeyPair()
+        BoxFactory alice = BoxFactory.getRandom();
         PublicKey aliceKey = alice.getPublicKey();
+        SealedBoxFactory aliceFactory = SealedBoxFactory.fromRecipientKey(aliceKey);
         byte[] message = "Hello, Alice!".getBytes(StandardCharsets.UTF_8);
-        byte[] sealedBox = Box.seal(aliceKey, message);
+        byte[] sealedBox = aliceFactory.seal(message);
 
-        byte[] decrypted = alice.open(sealedBox);
+        byte[] decrypted = alice.unseal(sealedBox);
     }
 
-    static void box() {
-        Box alice = new Box();
+    static void boxFactory() {
+        BoxFactory alice = BoxFactory.getRandom();
         PublicKey alicePublicKey = alice.getPublicKey();
-        Box bob = new Box();
+        BoxFactory bob = BoxFactory.getRandom();
         PublicKey bobPublicKey = bob.getPublicKey();
 
         // nonce can be any length but can only be used once per key

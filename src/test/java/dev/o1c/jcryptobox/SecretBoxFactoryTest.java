@@ -1,17 +1,17 @@
 package dev.o1c.jcryptobox;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
-import static org.junit.Assert.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
-public class SecretBoxTest {
+class SecretBoxFactoryTest {
 
     @Test
-    public void smokeTest() throws Exception {
-        SecretBox key = new SecretBox();
+    void smokeTest() throws Exception {
+        SecretBoxFactory key = SecretBoxFactory.getRandom();
         MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
         byte[] message = "Hello, world!".getBytes(StandardCharsets.UTF_8);
         byte[] nonce = sha256.digest(message);

@@ -7,22 +7,36 @@ import javax.crypto.spec.SecretKeySpec;
 import java.security.GeneralSecurityException;
 import java.util.Objects;
 
-public class SecretBox {
-    public static final int TAG_BYTES = 16;
+public class SecretBoxFactory {
+    private static final int TAG_BYTES = 16;
     private static final int TAG_BITS = TAG_BYTES * Byte.SIZE;
 
     private final SecretKey key;
 
-    public SecretBox() {
-        this(Algorithms.getAesKeyGenerator().generateKey());
+    private SecretBoxFactory(SecretKey key) {
+        this.key = key;
     }
 
-    public SecretBox(SecretKey key) {
-        this.key = Objects.requireNonNull(key);
-    }
-
-    public SecretBox(byte[] keyData) {
+    private SecretBoxFactory(byte[] keyData) {
         key = new SecretKeySpec(keyData, "AES");
+    }
+
+    public static SecretBoxFactory getRandom() {
+        return new SecretBoxFactory(Algorithms.getAesKeyGenerator().generateKey());
+    }
+
+    public static SecretBoxFactory fromKeyData(byte[] keyData) {
+        Objects.requireNonNull(keyData);
+        return new SecretBoxFactory(keyData);
+    }
+
+    public static SecretBoxFactory fromSecretKey(SecretKey key) {
+        Objects.requireNonNull(key);
+        return new SecretBoxFactory(key);
+    }
+
+    public static int getTagLength() {
+        return TAG_BYTES;
     }
 
     public void box(byte[] nonce, byte[] input, int inOffset, int inLength, byte[] output, int outOffset) {

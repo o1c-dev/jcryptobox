@@ -5,30 +5,37 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.InvalidKeyException;
 import java.security.KeyPair;
-import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
+import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.KeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
+import java.util.Objects;
 
-public class Box {
-
+public class BoxFactory {
     private final KeyAgreement keyAgreement = Algorithms.getECDH();
     private final PublicKey publicKey;
+    private final byte[] encodedKey;
 
-    public Box() {
-        this(generateKeyPair());
+    private BoxFactory(PublicKey publicKey, PrivateKey privateKey) {
+        this.publicKey = publicKey;
+        encodedKey = publicKey.getEncoded();
+        try {
+            keyAgreement.init(privateKey);
+        } catch (InvalidKeyException e) {
+            throw new IllegalArgumentException(e);
+        }
     }
 
-    public Box(KeyPair keyPair) {
-        publicKey = keyPair.getPublic();
-        try {
-            keyAgreement.init(keyPair.getPrivate());
-        } catch (InvalidKeyException e) {
-            throw new IllegalStateException(e);
-        }
+    public static BoxFactory getRandom() {
+        return fromKeyPair(Algorithms.getECGenerator().generateKeyPair());
+    }
+
+    public static BoxFactory fromKeyPair(KeyPair keyPair) {
+        Objects.requireNonNull(keyPair);
+        return new BoxFactory(keyPair.getPublic(), keyPair.getPrivate());
     }
 
     public PublicKey getPublicKey() {
@@ -45,7 +52,7 @@ public class Box {
     }
 
     public byte[] box(PublicKey recipient, byte[] nonce, byte[] message) {
-        return generateSecretBox(recipient).box(nonce, message);
+        return box(recipient, nonce, message, 0, message.length);
     }
 
     public void open(PublicKey sender, byte[] nonce, byte[] input, int inOffset, int inLength, byte[] output, int outOffset) {
@@ -57,43 +64,56 @@ public class Box {
     }
 
     public byte[] open(PublicKey sender, byte[] nonce, byte[] box) {
-        return recoverSecretBox(sender).open(nonce, box);
+        return open(sender, nonce, box, 0, box.length);
     }
 
-    public byte[] open(byte[] sealedBox) {
-        int ekLength = Byte.toUnsignedInt(sealedBox[0]);
-        int messageLength = sealedBox.length - 1 - ekLength;
-        if (messageLength < SecretBox.TAG_BYTES) {
+    public void unseal(byte[] input, int inOffset, int inLength, byte[] output, int outOffset) {
+        int keyLength = Byte.toUnsignedInt(input[inOffset]);
+        int boxLength = inLength - 1 - keyLength;
+        if (boxLength < SecretBoxFactory.getTagLength()) {
             throw new IllegalArgumentException("Sealed box too small");
         }
-        KeySpec keySpec = new X509EncodedKeySpec(Arrays.copyOfRange(sealedBox, 1, 1 + ekLength));
-        PublicKey ephemeralKey;
+        KeySpec keySpec = new X509EncodedKeySpec(Arrays.copyOfRange(input, inOffset + 1, inOffset + 1 + keyLength));
+        PublicKey sealKey;
         try {
-            ephemeralKey = Algorithms.getECFactory().generatePublic(keySpec);
+            sealKey = Algorithms.getECFactory().generatePublic(keySpec);
         } catch (InvalidKeySpecException e) {
             throw new IllegalArgumentException(e);
         }
-
         MessageDigest sha256 = Algorithms.getSha256();
-        sha256.update(ephemeralKey.getEncoded());
-        sha256.update(publicKey.getEncoded());
+        sha256.update(input, inOffset + 1, keyLength);
+        sha256.update(encodedKey);
         byte[] nonce = sha256.digest();
 
-        return open(ephemeralKey, nonce, sealedBox, 1 + ekLength, messageLength);
+        open(sealKey, nonce, input, inOffset + 1 + keyLength, boxLength, output, outOffset);
     }
 
-    private SecretBox generateSecretBox(PublicKey recipient) {
+    public byte[] unseal(byte[] sealedBox, int offset, int length) {
+        int messageLength = length - 1 - encodedKey.length - SecretBoxFactory.getTagLength();
+        if (messageLength < 0) {
+            throw new IllegalArgumentException("Sealed box too small");
+        }
+        byte[] message = new byte[messageLength];
+        unseal(sealedBox, offset, length, message, 0);
+        return message;
+    }
+
+    public byte[] unseal(byte[] sealedBox) {
+        return unseal(sealedBox, 0, sealedBox.length);
+    }
+
+    private SecretBoxFactory generateSecretBox(PublicKey recipient) {
         Mac kdf = initKDF(recipient);
-        kdf.update(publicKey.getEncoded());
+        kdf.update(encodedKey);
         kdf.update(recipient.getEncoded());
-        return new SecretBox(kdf.doFinal());
+        return SecretBoxFactory.fromKeyData(kdf.doFinal());
     }
 
-    private SecretBox recoverSecretBox(PublicKey sender) {
+    private SecretBoxFactory recoverSecretBox(PublicKey sender) {
         Mac kdf = initKDF(sender);
         kdf.update(sender.getEncoded());
-        kdf.update(publicKey.getEncoded());
-        return new SecretBox(kdf.doFinal());
+        kdf.update(encodedKey);
+        return SecretBoxFactory.fromKeyData(kdf.doFinal());
     }
 
     private Mac initKDF(PublicKey peerKey) {
@@ -109,29 +129,6 @@ public class Box {
             throw new IllegalStateException(e);
         }
         return kdf;
-    }
-
-    public static byte[] seal(PublicKey recipient, byte[] message) {
-        Box box = new Box();
-        byte[] ephemeralKey = box.publicKey.getEncoded();
-        MessageDigest sha256 = Algorithms.getSha256();
-        sha256.update(ephemeralKey);
-
-        int ekLength = ephemeralKey.length;
-        byte[] seal = new byte[1 + ekLength + message.length + SecretBox.TAG_BYTES];
-        seal[0] = (byte) ekLength;
-        System.arraycopy(ephemeralKey, 0, seal, 1, ekLength);
-        sha256.update(recipient.getEncoded());
-        byte[] nonce = sha256.digest();
-
-        box.box(recipient, nonce, message, 0, message.length, seal, 1 + ekLength);
-        return seal;
-    }
-
-    public static KeyPair generateKeyPair() {
-        KeyPairGenerator keyPairGenerator = Algorithms.getECGenerator();
-        keyPairGenerator.initialize(256);
-        return keyPairGenerator.generateKeyPair();
     }
 
 }
