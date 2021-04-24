@@ -16,8 +16,8 @@
     <url>https://github.com/o1c-dev/jcryptobox</url>
     <licenses>
         <license>
-            <name>Apache License 2.0</name>
-            <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+            <name>ISC License</name>
+            <url>https://opensource.org/licenses/ISC</url>
         </license>
     </licenses>
     <properties>
