@@ -4,11 +4,9 @@ import javax.crypto.KeyAgreement;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.InvalidKeyException;
-import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.KeySpec;
@@ -17,7 +15,7 @@ import java.util.Arrays;
 
 public class Box {
 
-    private final KeyAgreement keyAgreement = getECDH();
+    private final KeyAgreement keyAgreement = Algorithms.getECDH();
     private final PublicKey publicKey;
 
     public Box() {
@@ -71,12 +69,12 @@ public class Box {
         KeySpec keySpec = new X509EncodedKeySpec(Arrays.copyOfRange(sealedBox, 1, 1 + ekLength));
         PublicKey ephemeralKey;
         try {
-            ephemeralKey = getECFactory().generatePublic(keySpec);
+            ephemeralKey = Algorithms.getECFactory().generatePublic(keySpec);
         } catch (InvalidKeySpecException e) {
             throw new IllegalArgumentException(e);
         }
 
-        MessageDigest sha256 = getSha256();
+        MessageDigest sha256 = Algorithms.getSha256();
         sha256.update(ephemeralKey.getEncoded());
         sha256.update(publicKey.getEncoded());
         byte[] nonce = sha256.digest();
@@ -104,7 +102,7 @@ public class Box {
         } catch (InvalidKeyException e) {
             throw new IllegalArgumentException(e);
         }
-        Mac kdf = getHmac();
+        Mac kdf = Algorithms.getHmac();
         try {
             kdf.init(new SecretKeySpec(keyAgreement.generateSecret(), "KDF"));
         } catch (InvalidKeyException e) {
@@ -116,7 +114,7 @@ public class Box {
     public static byte[] seal(PublicKey recipient, byte[] message) {
         Box box = new Box();
         byte[] ephemeralKey = box.publicKey.getEncoded();
-        MessageDigest sha256 = getSha256();
+        MessageDigest sha256 = Algorithms.getSha256();
         sha256.update(ephemeralKey);
 
         int ekLength = ephemeralKey.length;
@@ -131,49 +129,9 @@ public class Box {
     }
 
     public static KeyPair generateKeyPair() {
-        KeyPairGenerator keyPairGenerator = getECGenerator();
+        KeyPairGenerator keyPairGenerator = Algorithms.getECGenerator();
         keyPairGenerator.initialize(256);
         return keyPairGenerator.generateKeyPair();
-    }
-
-    private static KeyAgreement getECDH() {
-        try {
-            return KeyAgreement.getInstance("ECDH");
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    private static KeyFactory getECFactory() {
-        try {
-            return KeyFactory.getInstance("EC");
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    private static KeyPairGenerator getECGenerator() {
-        try {
-            return KeyPairGenerator.getInstance("EC");
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    private static Mac getHmac() {
-        try {
-            return Mac.getInstance("HmacSHA256");
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    private static MessageDigest getSha256() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
     }
 
 }

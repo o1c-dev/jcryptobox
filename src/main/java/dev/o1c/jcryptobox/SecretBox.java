@@ -1,13 +1,10 @@
 package dev.o1c.jcryptobox;
 
 import javax.crypto.Cipher;
-import javax.crypto.KeyGenerator;
-import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.GeneralSecurityException;
-import java.security.NoSuchAlgorithmException;
 import java.util.Objects;
 
 public class SecretBox {
@@ -17,7 +14,7 @@ public class SecretBox {
     private final SecretKey key;
 
     public SecretBox() {
-        this(getAesKeyGenerator().generateKey());
+        this(Algorithms.getAesKeyGenerator().generateKey());
     }
 
     public SecretBox(SecretKey key) {
@@ -29,7 +26,7 @@ public class SecretBox {
     }
 
     public void box(byte[] nonce, byte[] input, int inOffset, int inLength, byte[] output, int outOffset) {
-        Cipher cipher = getAesCipher();
+        Cipher cipher = Algorithms.getAesCipher();
         try {
             cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, nonce));
             cipher.doFinal(input, inOffset, inLength, output, outOffset);
@@ -49,7 +46,7 @@ public class SecretBox {
     }
 
     public void open(byte[] nonce, byte[] input, int inOffset, int inLength, byte[] output, int outOffset) {
-        Cipher cipher = getAesCipher();
+        Cipher cipher = Algorithms.getAesCipher();
         try {
             cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, nonce));
             cipher.doFinal(input, inOffset, inLength, output, outOffset);
@@ -70,19 +67,4 @@ public class SecretBox {
         return open(nonce, box, 0, box.length);
     }
 
-    private static Cipher getAesCipher() {
-        try {
-            return Cipher.getInstance("AES/GCM/NoPadding");
-        } catch (NoSuchPaddingException | NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    private static KeyGenerator getAesKeyGenerator() {
-        try {
-            return KeyGenerator.getInstance("AES");
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-    }
 }
