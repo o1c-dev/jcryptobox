@@ -38,6 +38,10 @@ enum SecurityLevel {
         }
     }
 
+    String getKdfMacAlgorithm() {
+        return kdfMacAlgorithm;
+    }
+
     KeyGenerator getKeyGenerator() {
         try {
             KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");

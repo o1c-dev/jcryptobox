@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
 import java.security.PublicKey;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -26,18 +27,18 @@ class SecurityLevelTest {
     @Test
     void checkDefaultSecurityLevel() {
         assertSame(SecurityLevel.SECRET, SecurityLevel.getDefault());
-        assertEquals(91, BoxFactory.getRandom().getPublicKey().getEncoded().length);
+        assertEquals(91, Box.generateKeyPair().getPublic().getEncoded().length);
     }
 
     @Test
     void checkOverriddenSecurityLevel() {
         System.setProperty(SECURITY_LEVEL, SecurityLevel.TOP_SECRET.name());
         assertSame(SecurityLevel.TOP_SECRET, SecurityLevel.getDefault());
-        BoxFactory alice = BoxFactory.getRandom();
-        PublicKey key = alice.getPublicKey();
+        KeyPair alice = Box.generateKeyPair();
+        PublicKey key = alice.getPublic();
         assertEquals(158, key.getEncoded().length);
-        SealedBoxFactory factory = SealedBoxFactory.fromRecipientKey(key);
+        SealedBox box = SealedBox.to(key);
         byte[] message = SECURITY_LEVEL.getBytes(StandardCharsets.UTF_8);
-        assertArrayEquals(message, alice.unseal(factory.seal(message)));
+        assertArrayEquals(message, SealedBox.unseal(alice, box.seal(message)));
     }
 }
