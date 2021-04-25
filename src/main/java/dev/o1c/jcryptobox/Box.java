@@ -12,6 +12,10 @@ import java.security.KeyPair;
 import java.security.PublicKey;
 import java.util.Objects;
 
+/**
+ * Toolkit for authenticated public key and secret key cryptography. Data can be boxed to provide confidentiality
+ * and authenticity which can only be opened by intended recipients.
+ */
 public class Box {
     public static final int TAG_LENGTH = 16;
     private static final int TAG_SIZE = 128;
@@ -64,20 +68,29 @@ public class Box {
         return open(nonce, box, 0, box.length);
     }
 
-    public static Box random() {
-        return new Box(SecurityLevel.getDefault().getKeyGenerator().generateKey());
-    }
-
+    /**
+     * Initializes a box to box data from the provided sender to the provided recipient.
+     */
     public static Box boxing(KeyPair senderKeyPair, PublicKey recipientKey) {
         return fromKeyExchange(senderKeyPair, recipientKey, true);
     }
 
+    /**
+     * Initializes a box to open data from the provided sender to the provided recipient.
+     */
     public static Box opening(KeyPair recipientKeyPair, PublicKey senderKey) {
         return fromKeyExchange(recipientKeyPair, senderKey, false);
     }
 
+    /**
+     * Generates a random public and private keypair.
+     */
     public static KeyPair generateKeyPair() {
         return SecurityLevel.getDefault().getKeyPairGenerator().generateKeyPair();
+    }
+
+    static Box random() {
+        return new Box(SecurityLevel.getDefault().getKeyGenerator().generateKey());
     }
 
     private static Box fromKeyExchange(KeyPair self, PublicKey peer, boolean isSender) {
