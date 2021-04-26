@@ -9,6 +9,13 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import java.util.Objects;
 
+/**
+ * Provides anonymous public key cryptography to allow anonymous senders to box data to a known recipient public key.
+ * Sealed boxes differ from a normal {@link Box} by including a randomly generated public key with the boxed message
+ * that the recipient can use to unseal the box.
+ *
+ * @see Box
+ */
 public class SealedBox {
     private final PublicKey recipientKey;
     private final byte[] encodedKey;
