@@ -2,6 +2,7 @@ package dev.o1c.jcryptobox;
 
 import org.junit.jupiter.api.Test;
 
+import javax.crypto.AEADBadTagException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
@@ -36,5 +37,18 @@ class BoxTest {
         byte[] aliceGift = Box.boxing(bob, alice.getPublic()).box(nonce, messageBtoA);
         assertArrayEquals(messageAtoB, Box.opening(bob, alice.getPublic()).open(nonce, bobGift));
         assertArrayEquals(messageBtoA, Box.opening(alice, bob.getPublic()).open(nonce, aliceGift));
+    }
+
+    @Test
+    void sealedBoxSmokeTest() {
+        KeyPair alice = Box.generateKeyPair();
+        Box.Seal box = Box.sealing(alice.getPublic());
+        byte[] message = "Hello, Alice, this is an anonymous message :)".getBytes(StandardCharsets.UTF_8);
+        byte[] seal = box.seal(message);
+        assertArrayEquals(message, Box.unsealing(alice).unseal(seal));
+
+        KeyPair bob = Box.generateKeyPair();
+        Throwable cause = assertThrows(IllegalArgumentException.class, () -> Box.unsealing(bob).unseal(seal)).getCause();
+        assertTrue(cause instanceof AEADBadTagException);
     }
 }

@@ -9,7 +9,12 @@ import javax.crypto.spec.SecretKeySpec;
 import java.security.GeneralSecurityException;
 import java.security.InvalidKeyException;
 import java.security.KeyPair;
+import java.security.MessageDigest;
 import java.security.PublicKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.KeySpec;
+import java.security.spec.X509EncodedKeySpec;
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -26,7 +31,8 @@ import java.util.Objects;
  * While a nonce can be of arbitrary length, the effective size of a GCM nonce is 12 bytes as longer values are
  * hashed into a 12 byte value.</p>
  *
- * @see SealedBox
+ * @see Seal
+ * @see Unseal
  */
 public class Box {
     /**
@@ -51,6 +57,7 @@ public class Box {
      * @param output    array of bytes to write encrypted data to
      * @param outOffset where in the output array to begin writing data
      * @throws IllegalArgumentException if the output buffer is too small
+     * @throws NullPointerException if any arrays are null
      */
     public void box(byte[] nonce, byte[] input, int inOffset, int inLength, byte[] output, int outOffset) {
         Cipher cipher = SecurityLevel.getDefault().getCipher();
@@ -70,6 +77,7 @@ public class Box {
      * @param offset  where in the message array to begin reading data to encrypt
      * @param length  how many bytes to read and encrypt
      * @return the boxed message
+     * @throws NullPointerException if any arrays are null
      */
     public byte[] box(byte[] nonce, byte[] message, int offset, int length) {
         byte[] box = new byte[length + TAG_LENGTH];
@@ -83,6 +91,7 @@ public class Box {
      * @param nonce   nonce to use to encrypt the input message
      * @param message array of bytes to encrypt
      * @return the boxed message
+     * @throws NullPointerException if any args are null
      */
     public byte[] box(byte[] nonce, byte[] message) {
         return box(nonce, message, 0, message.length);
@@ -99,8 +108,10 @@ public class Box {
      * @param outOffset where in the output array to begin writing decrypted data
      * @throws IllegalArgumentException if the boxed data cannot be successfully authenticated and decrypted or if the
      *                                  output buffer is too small
+     * @throws NullPointerException if any arrays are null
      */
     public void open(byte[] nonce, byte[] input, int inOffset, int inLength, byte[] output, int outOffset) {
+        Objects.requireNonNull(nonce);
         Cipher cipher = SecurityLevel.getDefault().getCipher();
         try {
             cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_SIZE, nonce));
@@ -119,6 +130,7 @@ public class Box {
      * @param length length of the boxed message in bytes (includes authentication tag)
      * @return the decrypted message
      * @throws IllegalArgumentException if the boxed data cannot be successfully authenticated and decrypted
+     * @throws NullPointerException if any arrays are null
      */
     public byte[] open(byte[] nonce, byte[] box, int offset, int length) {
         Objects.requireNonNull(box);
@@ -134,6 +146,7 @@ public class Box {
      * @param box   array of boxed data to decrypt
      * @return the decrypted message
      * @throws IllegalArgumentException if the boxed data cannot be successfully authenticated and decrypted
+     * @throws NullPointerException if any args are null
      */
     public byte[] open(byte[] nonce, byte[] box) {
         Objects.requireNonNull(box);
@@ -146,8 +159,12 @@ public class Box {
      * @param senderKeyPair keypair of the principal sending the boxed data
      * @param recipientKey  public key of the principal opening the boxed data
      * @return a new box ready to encrypt data from the sender to the recipient
+     * @throws NullPointerException if any args are null
+     * @see #opening(KeyPair, PublicKey)
      */
     public static Box boxing(KeyPair senderKeyPair, PublicKey recipientKey) {
+        Objects.requireNonNull(senderKeyPair);
+        Objects.requireNonNull(recipientKey);
         return fromKeyExchange(senderKeyPair, recipientKey, true);
     }
 
@@ -157,9 +174,39 @@ public class Box {
      * @param recipientKeyPair keypair of the principal opening the boxed data
      * @param senderKey        public key of the principal who sent the boxed data
      * @return a new box ready to decrypt data from the sender to the recipient
+     * @throws NullPointerException if any args are null
+     * @see #boxing(KeyPair, PublicKey)
      */
     public static Box opening(KeyPair recipientKeyPair, PublicKey senderKey) {
+        Objects.requireNonNull(recipientKeyPair);
+        Objects.requireNonNull(senderKey);
         return fromKeyExchange(recipientKeyPair, senderKey, false);
+    }
+
+    /**
+     * Creates a box seal to the provided recipient key for creating sealed boxes.
+     *
+     * @param recipient public key of the principal receiving the sealed box
+     * @return a new box seal ready to encrypt data to the recipient
+     * @throws NullPointerException if the provided key is null
+     * @see #unsealing(KeyPair)
+     */
+    public static Seal sealing(PublicKey recipient) {
+        Objects.requireNonNull(recipient);
+        return new Seal(recipient);
+    }
+
+    /**
+     * Creates a box unseal from the provided recipient keypair for decrypting sealed boxes sent to the recipient.
+     *
+     * @param recipient keypair of recipient of sealed boxes
+     * @return a new box unseal ready to decrypt data to the recipient
+     * @throws NullPointerException if the provided keypair is null
+     * @see #sealing(PublicKey)
+     */
+    public static Unseal unsealing(KeyPair recipient) {
+        Objects.requireNonNull(recipient);
+        return new Unseal(recipient);
     }
 
     /**
@@ -201,5 +248,188 @@ public class Box {
         byte[] mac = kdf.doFinal();
         SecretKey key = new SecretKeySpec(mac, 0, mac.length / 2, "AES");
         return new Box(key);
+    }
+
+    /**
+     * Sealed boxes provide the ability for an anonymous sender to encrypt a message to a known recipient given their
+     * public key. Sealed boxes differ from a normal {@link Box} in that only the integrity of the message can be
+     * verified by the recipient while normal boxes also verify sender identity. Messages are encrypted using ephemeral
+     * public keys whose corresponding private keys are discarded. Without the private key used for a given message, the
+     * sender cannot decrypt their own message later.
+     *
+     * @see Box#sealing(PublicKey)
+     * @see Unseal
+     */
+    public static class Seal {
+        private final PublicKey recipientKey;
+        private final byte[] encodedKey;
+
+        Seal(PublicKey recipientKey) {
+            this.recipientKey = recipientKey;
+            encodedKey = recipientKey.getEncoded();
+        }
+
+        /**
+         * Encrypts the given slice of input data into a sealed box in the provided output array at the given offset.
+         *
+         * @param input     array of bytes to read data to encrypt
+         * @param inOffset  where in the input array to begin reading data
+         * @param inLength  how many bytes to read and encrypt
+         * @param output    array of bytes to write encrypted data to
+         * @param outOffset where in the output array to begin writing data
+         * @throws IllegalArgumentException       if the output buffer is too small
+         * @throws ArrayIndexOutOfBoundsException if the offsets or length are out of bounds of the given arrays
+         * @throws NullPointerException           if the input or output arrays are null
+         */
+        public void seal(byte[] input, int inOffset, int inLength, byte[] output, int outOffset) {
+            Objects.requireNonNull(input);
+            Objects.requireNonNull(output);
+            if (inOffset < 0 || inOffset > input.length || inLength < 0 || outOffset < 0 || outOffset > output.length) {
+                throw new ArrayIndexOutOfBoundsException();
+            }
+            int keyLength = encodedKey.length;
+            if (output.length - outOffset < 1 + keyLength + inLength + TAG_LENGTH) {
+                throw new IllegalArgumentException("Output buffer too short");
+            }
+
+            KeyPair sealKeyPair = generateKeyPair();
+            Box box = boxing(sealKeyPair, recipientKey);
+            byte[] sealKey = sealKeyPair.getPublic().getEncoded();
+            output[outOffset] = (byte) keyLength;
+            System.arraycopy(sealKey, 0, output, outOffset + 1, keyLength);
+
+            MessageDigest digest = SecurityLevel.getDefault().getMessageDigest();
+            digest.update(sealKey);
+            digest.update(encodedKey);
+            byte[] nonce = digest.digest();
+
+            box.box(nonce, input, inOffset, inLength, output, outOffset + 1 + keyLength);
+        }
+
+        /**
+         * Encrypts the given slice of input data and returns the sealed box data.
+         *
+         * @param message array of bytes to read data to encrypt
+         * @param offset  where in the message array to begin reading data to encrypt
+         * @param length  how many bytes to read and encrypt
+         * @return the sealed box data
+         * @throws NullPointerException if the given array is null
+         */
+        public byte[] seal(byte[] message, int offset, int length) {
+            Objects.requireNonNull(message);
+            byte[] box = new byte[1 + length + encodedKey.length + TAG_LENGTH];
+            seal(message, offset, length, box, 0);
+            return box;
+        }
+
+        /**
+         * Encrypts the given message bytes and returns the sealed box data.
+         *
+         * @param message array of bytes to read and encrypt
+         * @return the sealed box data
+         * @throws NullPointerException if the given array is null
+         */
+        public byte[] seal(byte[] message) {
+            Objects.requireNonNull(message);
+            return seal(message, 0, message.length);
+        }
+
+    }
+
+    /**
+     * Provides functionality to unseal a {@linkplain Seal sealed box}.
+     *
+     * @see Box#unsealing(KeyPair)
+     * @see Seal
+     */
+    public static class Unseal {
+        private final KeyPair recipient;
+        private final byte[] encodedKey;
+
+        Unseal(KeyPair recipient) {
+            this.recipient = recipient;
+            encodedKey = recipient.getPublic().getEncoded();
+        }
+
+        /**
+         * Decrypts the sealed box slice of input data and writes the plaintext message to the provided output array at
+         * the given offset.
+         *
+         * @param input     array of bytes to read sealed box data to decrypt
+         * @param inOffset  where in the input array to begin reading data to decrypt
+         * @param inLength  length of the sealed box in bytes (includes encoded public key and authentication tag)
+         * @param output    array of bytes to write decrypted message to
+         * @param outOffset where in the output array to begin writing decrypted data
+         * @throws IllegalArgumentException       if the sealed box cannot be successfully decrypted or if the output
+         *                                        buffer is too small
+         * @throws ArrayIndexOutOfBoundsException if the offsets or length are out of range of their arrays
+         * @throws NullPointerException           if the input or output arrays are null
+         */
+        public void unseal(byte[] input, int inOffset, int inLength, byte[] output, int outOffset) {
+            Objects.requireNonNull(input);
+            Objects.requireNonNull(output);
+            if (inOffset < 0 || inOffset > input.length || outOffset < 0 || outOffset > output.length || inLength < 0) {
+                throw new ArrayIndexOutOfBoundsException();
+            }
+            int keyLength = Byte.toUnsignedInt(input[inOffset]);
+            int boxLength = inLength - 1 - keyLength;
+            if (boxLength < TAG_LENGTH) {
+                throw new IllegalArgumentException("Sealed box too small");
+            }
+            KeySpec keySpec = new X509EncodedKeySpec(Arrays.copyOfRange(input, inOffset + 1, inOffset + 1 + keyLength));
+            SecurityLevel securityLevel = SecurityLevel.getDefault();
+            PublicKey sealKey;
+            try {
+                sealKey = securityLevel.getKeyFactory().generatePublic(keySpec);
+            } catch (InvalidKeySpecException e) {
+                throw new IllegalArgumentException(e);
+            }
+            Box box = opening(recipient, sealKey);
+
+            MessageDigest digest = securityLevel.getMessageDigest();
+            digest.update(input, inOffset + 1, keyLength);
+            digest.update(encodedKey);
+            byte[] nonce = digest.digest();
+
+            box.open(nonce, input, inOffset + 1 + keyLength, boxLength, output, outOffset);
+        }
+
+        /**
+         * Decrypts the given sealed box slice and returns the plaintext message.
+         *
+         * @param sealedBox array of bytes to read sealed box data to decrypt
+         * @param offset    where in the array to begin reading data to decrypt
+         * @param length    length of the sealed box in bytes (includes encoded public key and authentication tag)
+         * @return the decrypted message
+         * @throws IllegalArgumentException       if the sealed box cannot be successfully decrypted
+         * @throws ArrayIndexOutOfBoundsException if the offset or length are out of range for the given array
+         * @throws NullPointerException           if the given array is null
+         */
+        public byte[] unseal(byte[] sealedBox, int offset, int length) {
+            Objects.requireNonNull(sealedBox);
+            if (offset < 0 || offset > sealedBox.length || length < 0) {
+                throw new ArrayIndexOutOfBoundsException();
+            }
+            int messageLength = length - 1 - encodedKey.length - TAG_LENGTH;
+            if (messageLength < 0) {
+                throw new IllegalArgumentException("Sealed box too small");
+            }
+            byte[] message = new byte[messageLength];
+            unseal(sealedBox, offset, length, message, 0);
+            return message;
+        }
+
+        /**
+         * Decrypts the given sealed box and returns the plaintext message.
+         *
+         * @param sealedBox array of bytes containing sealed box data
+         * @return the decrypted message
+         * @throws IllegalArgumentException if the sealed box cannot be successfully decrypted
+         * @throws NullPointerException     if the given array is null
+         */
+        public byte[] unseal(byte[] sealedBox) {
+            Objects.requireNonNull(sealedBox);
+            return unseal(sealedBox, 0, sealedBox.length);
+        }
     }
 }

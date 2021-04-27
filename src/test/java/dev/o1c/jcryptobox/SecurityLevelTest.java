@@ -37,8 +37,8 @@ class SecurityLevelTest {
         KeyPair alice = Box.generateKeyPair();
         PublicKey key = alice.getPublic();
         assertEquals(158, key.getEncoded().length);
-        SealedBox box = SealedBox.to(key);
+        Box.Seal box = Box.sealing(key);
         byte[] message = SECURITY_LEVEL.getBytes(StandardCharsets.UTF_8);
-        assertArrayEquals(message, SealedBox.unseal(alice, box.seal(message)));
+        assertArrayEquals(message, Box.unsealing(alice).unseal(box.seal(message)));
     }
 }
