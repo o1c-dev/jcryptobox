@@ -7,12 +7,6 @@
     <version>1.0</version>
     <packaging>jar</packaging>
 
-    <scm>
-        <connection>scm:git:git://github.com/o1c-dev/jcryptobox.git</connection>
-        <developerConnection>scm:git:git@github.com:o1c-dev/jcryptobox.git</developerConnection>
-        <url>https://github.com/o1c-dev/jcryptobox</url>
-    </scm>
-
     <name>JCryptoBox</name>
     <description>
         JCryptoBox is a Java cryptographic facade API inspired by NaCl and libsodium. JCryptoBox uses cryptographic
@@ -26,6 +20,29 @@
             <url>https://opensource.org/licenses/ISC</url>
         </license>
     </licenses>
+    <inceptionYear>2021</inceptionYear>
+    <scm>
+        <connection>scm:git:git://github.com/o1c-dev/jcryptobox.git</connection>
+        <developerConnection>scm:git:git@github.com:o1c-dev/jcryptobox.git</developerConnection>
+        <url>https://github.com/o1c-dev/jcryptobox</url>
+    </scm>
+    <developers>
+        <developer>
+            <id>jvz</id>
+            <name>Matt Sicker</name>
+            <email>mattsicker@apache.org</email>
+            <url>https://github.com/jvz</url>
+        </developer>
+    </developers>
+    <ciManagement>
+        <system>GitHub Actions</system>
+        <url>https://github.com/o1c-dev/jcryptobox/actions/workflows/maven.yml</url>
+    </ciManagement>
+    <issueManagement>
+        <system>GitHub Issues</system>
+        <url>https://github.com/o1c-dev/jcryptobox/issues</url>
+    </issueManagement>
+
     <properties>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
