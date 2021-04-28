@@ -64,6 +64,11 @@
             <id>ossrh</id>
             <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
         </snapshotRepository>
+        <repository>
+            <id>github</id>
+            <name>GitHub JCryptoBox Apache Maven Packages</name>
+            <url>https://maven.pkg.github.com/o1c-dev/jcryptobox</url>
+        </repository>
     </distributionManagement>
 
     <build>
