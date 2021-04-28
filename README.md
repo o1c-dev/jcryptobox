@@ -1,5 +1,7 @@
 # JCryptoBox
 
+[![javadoc](https://javadoc.io/badge2/dev.o1c/jcryptobox/javadoc.svg)](https://javadoc.io/doc/dev.o1c/jcryptobox)
+
 JCryptoBox is a simple cryptography facade inspired by NaCl and libsodium that uses slightly more conservative cryptography standards (NIST FIPS 140).
 Cryptographic APIs are exposed via the `JCryptoBox` class.
 By default, boxes provide 128-bit security.
