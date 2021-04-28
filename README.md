@@ -1,7 +1,7 @@
 # JCryptoBox
 
 JCryptoBox is a simple cryptography facade inspired by NaCl and libsodium that uses slightly more conservative cryptography standards (NIST FIPS 140).
-Cryptographic APIs are exposed via the `Box` class.
+Cryptographic APIs are exposed via the `JCryptoBox` class.
 By default, boxes provide 128-bit security.
 This can be overridden via the system property `dev.o1c.jcryptobox.SecurityLevel` which can be set to `SECRET` (128-bit security) or `TOP_SECRET` (256-bit security).
 
@@ -20,7 +20,7 @@ JCryptoBox is published to Maven Central and can be added to a normal Apache Mav
 A quick overview of some APIs:
 
 ```java
-import dev.o1c.jcryptobox.Box;
+import dev.o1c.jcryptobox.JCryptoBox;
 
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
@@ -28,16 +28,16 @@ import java.security.SecureRandom;
 
 class Example {
     static void sealedBox() {
-        KeyPair alice = Box.generateKeyPair();
+        KeyPair alice = JCryptoBox.generateKeyPair();
         byte[] message = "Hello, Alice!".getBytes(StandardCharsets.UTF_8);
-        byte[] sealedBox = Box.sealing(alice.getPublic()).seal(message);
+        byte[] sealedBox = JCryptoBox.sealing(alice.getPublic()).seal(message);
 
-        byte[] decrypted = Box.unsealing(alice).unseal(sealedBox);
+        byte[] decrypted = JCryptoBox.unsealing(alice).unseal(sealedBox);
     }
 
     static void boxFactory() {
-        KeyPair alice = Box.generateKeyPair();
-        KeyPair bob = Box.generateKeyPair();
+        KeyPair alice = JCryptoBox.generateKeyPair();
+        KeyPair bob = JCryptoBox.generateKeyPair();
 
         // nonce can be any length but can only be used once per key
         byte[] nonce = new byte[16];
@@ -45,13 +45,13 @@ class Example {
         random.nextBytes(nonce);
         // or some sequential source with networking, etc.
         byte[] message1 = "Hello, Bob! ~Alice".getBytes(StandardCharsets.UTF_8);
-        byte[] box1 = Box.boxing(alice, bob.getPublic()).box(nonce, message1);
-        byte[] decrypted1 = Box.opening(bob, alice.getPublic()).open(nonce, box1);
+        byte[] box1 = JCryptoBox.boxing(alice, bob.getPublic()).box(nonce, message1);
+        byte[] decrypted1 = JCryptoBox.opening(bob, alice.getPublic()).open(nonce, box1);
 
         random.nextBytes(nonce);
         byte[] message2 = "Greetings, Alice! ~Bob".getBytes(StandardCharsets.UTF_8);
-        byte[] box2 = Box.boxing(bob, alice.getPublic()).box(nonce, message2);
-        byte[] decrypted2 = Box.opening(alice, bob.getPublic()).open(nonce, box2);
+        byte[] box2 = JCryptoBox.boxing(bob, alice.getPublic()).box(nonce, message2);
+        byte[] decrypted2 = JCryptoBox.opening(alice, bob.getPublic()).open(nonce, box2);
     }
 }
 ```

@@ -27,18 +27,18 @@ class SecurityLevelTest {
     @Test
     void checkDefaultSecurityLevel() {
         assertSame(SecurityLevel.SECRET, SecurityLevel.getDefault());
-        assertEquals(91, Box.generateKeyPair().getPublic().getEncoded().length);
+        assertEquals(91, JCryptoBox.generateKeyPair().getPublic().getEncoded().length);
     }
 
     @Test
     void checkOverriddenSecurityLevel() {
         System.setProperty(SECURITY_LEVEL, SecurityLevel.TOP_SECRET.name());
         assertSame(SecurityLevel.TOP_SECRET, SecurityLevel.getDefault());
-        KeyPair alice = Box.generateKeyPair();
+        KeyPair alice = JCryptoBox.generateKeyPair();
         PublicKey key = alice.getPublic();
         assertEquals(158, key.getEncoded().length);
-        Box.Seal box = Box.sealing(key);
+        JCryptoBox.Seal box = JCryptoBox.sealing(key);
         byte[] message = SECURITY_LEVEL.getBytes(StandardCharsets.UTF_8);
-        assertArrayEquals(message, Box.unsealing(alice).unseal(box.seal(message)));
+        assertArrayEquals(message, JCryptoBox.unsealing(alice).unseal(box.seal(message)));
     }
 }

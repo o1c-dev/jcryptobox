@@ -2,7 +2,7 @@
 
 JCryptoBox is a Java cryptographic facade API inspired by [NaCl](https://nacl.cr.yp.to/) and [libsodium](https://doc.libsodium.org/).
 JCryptoBox uses cryptographic algorithms compliant with NIST FIPS 140 recommendations and works with or without a certified FIPS Java cryptography library such as [BouncyCastle](https://www.bouncycastle.org/fips-java/).
-Cryptographic APIs are exposed via `Box`.
+Cryptographic APIs are exposed via `JCryptoBox`.
 By default, boxes provide 128-bit security, and this can be configured to default to 256-bit security.
 
 ## Usage
@@ -19,19 +19,19 @@ JCryptoBox is published to Maven Central and can be added to a normal Apache Mav
 
 ### Key Generation
 
-Public and private keys can be generated via `Box.generateKeyPair()`.
+Public and private keys can be generated via `JCryptoBox.generateKeyPair()`.
 By default, these are 256-bit ECDH keys using the standard NIST P.256 curve parameters.
 In top secret security mode, this uses NIST P.521.
-Keys can also be imported through standard Java cryptographic APIs, though that is an advanced topic.
+Keys can be encoded and decoded via `JCryptoBox.encodeKey()` and `JCryptoBox.decodePublicKey()`/`JCryptoBox.decodePrivateKey()` respectively.
 
 ### Encryption
 
 Boxes provide mutual authentication and confidentiality of messages sent between two principals.
-To encrypt a message from a sender to a recipient, a box is constructed from `Box.boxing()`.
-To decrypt a message from a sender to a recipient, a box is constructed from `Box.opening()`.
+To encrypt a message from a sender to a recipient, a box is constructed from `JCryptoBox.boxing()`.
+To decrypt a message from a sender to a recipient, a box is constructed from `JCryptoBox.opening()`.
 
 Sealed boxes provide confidentiality and integrity of a message sent from an anonymous sender to a known recipient principal.
-These can be constructed via `Box.sealing()` and `Box.unsealing()` for encryption and decryption respectively.
+These can be constructed via `JCryptoBox.sealing()` and `JCryptoBox.unsealing()` for encryption and decryption respectively.
 
 ## Export Notice
 

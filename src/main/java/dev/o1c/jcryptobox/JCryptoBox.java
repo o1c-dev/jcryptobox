@@ -8,11 +8,14 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.GeneralSecurityException;
 import java.security.InvalidKeyException;
+import java.security.Key;
 import java.security.KeyPair;
 import java.security.MessageDigest;
+import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.KeySpec;
+import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import java.util.Objects;
@@ -34,7 +37,7 @@ import java.util.Objects;
  * @see Seal
  * @see Unseal
  */
-public class Box {
+public class JCryptoBox {
     /**
      * Number of bytes needed to store the authentication tag at the end of a box.
      */
@@ -43,7 +46,7 @@ public class Box {
 
     private final SecretKey key;
 
-    private Box(SecretKey key) {
+    private JCryptoBox(SecretKey key) {
         this.key = key;
     }
 
@@ -57,7 +60,7 @@ public class Box {
      * @param output    array of bytes to write encrypted data to
      * @param outOffset where in the output array to begin writing data
      * @throws IllegalArgumentException if the output buffer is too small
-     * @throws NullPointerException if any arrays are null
+     * @throws NullPointerException     if any arrays are null
      */
     public void box(byte[] nonce, byte[] input, int inOffset, int inLength, byte[] output, int outOffset) {
         Cipher cipher = SecurityLevel.getDefault().getCipher();
@@ -108,7 +111,7 @@ public class Box {
      * @param outOffset where in the output array to begin writing decrypted data
      * @throws IllegalArgumentException if the boxed data cannot be successfully authenticated and decrypted or if the
      *                                  output buffer is too small
-     * @throws NullPointerException if any arrays are null
+     * @throws NullPointerException     if any arrays are null
      */
     public void open(byte[] nonce, byte[] input, int inOffset, int inLength, byte[] output, int outOffset) {
         Objects.requireNonNull(nonce);
@@ -130,7 +133,7 @@ public class Box {
      * @param length length of the boxed message in bytes (includes authentication tag)
      * @return the decrypted message
      * @throws IllegalArgumentException if the boxed data cannot be successfully authenticated and decrypted
-     * @throws NullPointerException if any arrays are null
+     * @throws NullPointerException     if any arrays are null
      */
     public byte[] open(byte[] nonce, byte[] box, int offset, int length) {
         Objects.requireNonNull(box);
@@ -146,7 +149,7 @@ public class Box {
      * @param box   array of boxed data to decrypt
      * @return the decrypted message
      * @throws IllegalArgumentException if the boxed data cannot be successfully authenticated and decrypted
-     * @throws NullPointerException if any args are null
+     * @throws NullPointerException     if any args are null
      */
     public byte[] open(byte[] nonce, byte[] box) {
         Objects.requireNonNull(box);
@@ -162,7 +165,7 @@ public class Box {
      * @throws NullPointerException if any args are null
      * @see #opening(KeyPair, PublicKey)
      */
-    public static Box boxing(KeyPair senderKeyPair, PublicKey recipientKey) {
+    public static JCryptoBox boxing(KeyPair senderKeyPair, PublicKey recipientKey) {
         Objects.requireNonNull(senderKeyPair);
         Objects.requireNonNull(recipientKey);
         return fromKeyExchange(senderKeyPair, recipientKey, true);
@@ -177,14 +180,14 @@ public class Box {
      * @throws NullPointerException if any args are null
      * @see #boxing(KeyPair, PublicKey)
      */
-    public static Box opening(KeyPair recipientKeyPair, PublicKey senderKey) {
+    public static JCryptoBox opening(KeyPair recipientKeyPair, PublicKey senderKey) {
         Objects.requireNonNull(recipientKeyPair);
         Objects.requireNonNull(senderKey);
         return fromKeyExchange(recipientKeyPair, senderKey, false);
     }
 
     /**
-     * Creates a box seal to the provided recipient key for creating sealed boxes.
+     * Creates a box to seal to the provided recipient key for creating sealed boxes.
      *
      * @param recipient public key of the principal receiving the sealed box
      * @return a new box seal ready to encrypt data to the recipient
@@ -197,7 +200,7 @@ public class Box {
     }
 
     /**
-     * Creates a box unseal from the provided recipient keypair for decrypting sealed boxes sent to the recipient.
+     * Creates a box to unseal from the provided recipient keypair for decrypting sealed boxes sent to the recipient.
      *
      * @param recipient keypair of recipient of sealed boxes
      * @return a new box unseal ready to decrypt data to the recipient
@@ -218,11 +221,58 @@ public class Box {
         return SecurityLevel.getDefault().getKeyPairGenerator().generateKeyPair();
     }
 
-    static Box random() {
-        return new Box(SecurityLevel.getDefault().getKeyGenerator().generateKey());
+    /**
+     * Encodes a key into its default encoded format. For public keys, this format is suitable for
+     * {@link X509EncodedKeySpec}, while private keys are formatted for {@link PKCS8EncodedKeySpec}.
+     *
+     * @param key key to encode
+     * @return the encoded form of the key
+     * @throws NullPointerException if the provided key is null
+     */
+    public static byte[] encodeKey(Key key) {
+        Objects.requireNonNull(key);
+        return key.getEncoded();
     }
 
-    private static Box fromKeyExchange(KeyPair self, PublicKey peer, boolean isSender) {
+    /**
+     * Decodes an encoded public key.
+     *
+     * @param encodedPublicKey encoded key data to parse and decode
+     * @return the decoded PublicKey
+     * @throws IllegalArgumentException if the provided public key data is invalid
+     * @throws NullPointerException     if the provided key is null
+     */
+    public static PublicKey decodePublicKey(byte[] encodedPublicKey) {
+        KeySpec keySpec = new X509EncodedKeySpec(encodedPublicKey);
+        try {
+            return SecurityLevel.getDefault().getKeyFactory().generatePublic(keySpec);
+        } catch (InvalidKeySpecException e) {
+            throw new IllegalArgumentException(e);
+        }
+    }
+
+    /**
+     * Decodes an encoded private key.
+     *
+     * @param encodedPrivateKey encoded key data to parse and decode
+     * @return the decoded PrivateKey
+     * @throws IllegalArgumentException if the provided private key data is invalid
+     * @throws NullPointerException     if the provided key is null
+     */
+    public static PrivateKey decodePrivateKey(byte[] encodedPrivateKey) {
+        KeySpec keySpec = new PKCS8EncodedKeySpec(encodedPrivateKey);
+        try {
+            return SecurityLevel.getDefault().getKeyFactory().generatePrivate(keySpec);
+        } catch (InvalidKeySpecException e) {
+            throw new IllegalArgumentException(e);
+        }
+    }
+
+    static JCryptoBox random() {
+        return new JCryptoBox(SecurityLevel.getDefault().getKeyGenerator().generateKey());
+    }
+
+    private static JCryptoBox fromKeyExchange(KeyPair self, PublicKey peer, boolean isSender) {
         SecurityLevel securityLevel = SecurityLevel.getDefault();
         KeyAgreement keyAgreement = securityLevel.getKeyAgreement();
         try {
@@ -247,17 +297,17 @@ public class Box {
         }
         byte[] mac = kdf.doFinal();
         SecretKey key = new SecretKeySpec(mac, 0, mac.length / 2, "AES");
-        return new Box(key);
+        return new JCryptoBox(key);
     }
 
     /**
      * Sealed boxes provide the ability for an anonymous sender to encrypt a message to a known recipient given their
-     * public key. Sealed boxes differ from a normal {@link Box} in that only the integrity of the message can be
+     * public key. Sealed boxes differ from a {@linkplain JCryptoBox normal box} in that only the integrity of the message can be
      * verified by the recipient while normal boxes also verify sender identity. Messages are encrypted using ephemeral
      * public keys whose corresponding private keys are discarded. Without the private key used for a given message, the
      * sender cannot decrypt their own message later.
      *
-     * @see Box#sealing(PublicKey)
+     * @see JCryptoBox#sealing(PublicKey)
      * @see Unseal
      */
     public static class Seal {
@@ -293,7 +343,7 @@ public class Box {
             }
 
             KeyPair sealKeyPair = generateKeyPair();
-            Box box = boxing(sealKeyPair, recipientKey);
+            JCryptoBox box = boxing(sealKeyPair, recipientKey);
             byte[] sealKey = sealKeyPair.getPublic().getEncoded();
             output[outOffset] = (byte) keyLength;
             System.arraycopy(sealKey, 0, output, outOffset + 1, keyLength);
@@ -339,7 +389,7 @@ public class Box {
     /**
      * Provides functionality to unseal a {@linkplain Seal sealed box}.
      *
-     * @see Box#unsealing(KeyPair)
+     * @see JCryptoBox#unsealing(KeyPair)
      * @see Seal
      */
     public static class Unseal {
@@ -384,7 +434,7 @@ public class Box {
             } catch (InvalidKeySpecException e) {
                 throw new IllegalArgumentException(e);
             }
-            Box box = opening(recipient, sealKey);
+            JCryptoBox box = opening(recipient, sealKey);
 
             MessageDigest digest = securityLevel.getMessageDigest();
             digest.update(input, inOffset + 1, keyLength);
